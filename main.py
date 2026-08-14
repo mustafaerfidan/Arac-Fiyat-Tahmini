@@ -4,7 +4,7 @@ import time
 import os
 
 # Kendi yazdığımız modülleri çağırıyoruz
-from link_toplayici import linkleri_topla 
+from link_toplayici import ilan_linklerini_topla 
 from veri_ayiklayici import araba_verisi_cek 
 
 def linkleri_dosyadan_oku(dosya_adi="linkler.txt"):
@@ -35,8 +35,8 @@ def main():
     print(f"Toplam {len(kategoriler)} adet kategori işlenmek üzere yüklendi.\n")
 
     with sync_playwright() as p:
-        # Sunucuda çalıştıracağımız zaman burayı True yapacağız. 
-        tarayici = p.chromium.launch(headless=False) 
+        # Sunucuda çalıştıracağımız için True yapıldı. 
+        tarayici = p.chromium.launch(headless=True) 
         sayfa = tarayici.new_page()
 
         # Metin dosyasından okunan her bir kategori için döngü başlıyor
@@ -44,8 +44,8 @@ def main():
             print(f"\n>>> '{kategori_adi}' kategorisi için işlemler başlıyor...")
             
             try:
-                # 1. Aşama: İlan linklerini topla
-                ilan_linkleri = linkleri_topla(sayfa, kategori_linki)
+                # 1. Aşama: İlan linklerini topla 
+                ilan_linkleri = ilan_linklerini_topla(sayfa, kategori_linki)
                 print(f"Toplam {len(ilan_linkleri)} adet ilan linki bulundu.")
 
                 # 2. Aşama: Linklerin içine girip veri çek
