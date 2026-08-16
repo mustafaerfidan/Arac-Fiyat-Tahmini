@@ -36,7 +36,7 @@ def main():
 
     with sync_playwright() as p:
         # Sunucuda çalıştıracağımız için True yapıldı. 
-        tarayici = p.chromium.launch(headless=False) 
+        tarayici = p.chromium.launch(headless=True) 
         sayfa = tarayici.new_page()
 
         # Metin dosyasından okunan her bir kategori için döngü başlıyor
