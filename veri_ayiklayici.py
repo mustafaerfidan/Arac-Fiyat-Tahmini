@@ -1,9 +1,17 @@
 from bs4 import BeautifulSoup
 
 def araba_verisi_cek(page, url):
-    # Dışarıdan (main.py'den) gelen page nesnesini kullanıyoruz
-    page.goto(url, timeout=60000)
-    page.wait_for_timeout(6000)
+    try:
+        # 1. DEĞİŞİKLİK: wait_until="domcontentloaded" ile resimleri/reklamları beklemeden, sadece HTML yazıları inince işlemi kesiyoruz!
+        page.goto(url, timeout=30000, wait_until="domcontentloaded")
+        
+        # 2. DEĞİŞİKLİK: Sabit 6 saniye beklemek yerine, sadece "h1" (İlan Başlığı) ekranda belirene kadar bekle diyoruz.
+        # Bu sayede sayfa 0.5 saniyede açılırsa kod 0.5 saniyede veriyi alıp çıkar!
+        page.wait_for_selector("h1", timeout=5000) 
+        
+    except Exception as e:
+        print(f"Hata veya yavaş yüklenme, ilan atlanıyor: {url}")
+        return {} # Hata olursa sistemi çökertme, boş dön ve diğer ilana geç
     
     html_icerigi = page.content()
     
