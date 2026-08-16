@@ -16,12 +16,16 @@ def ilan_linklerini_topla(page, liste_url):
             
         print(f"[{sayfa_no}. Sayfa] Taranıyor: {guncel_url}")
         
-        page.goto(guncel_url, timeout=60000)
-        page.wait_for_timeout(4000) # Sayfanın yüklenmesini bekle
+        # HIZLANDIRMA 1: Resimleri bekleme, sadece HTML kodları inince devam et
+        page.goto(guncel_url, timeout=60000, wait_until="domcontentloaded")
         
-        # Sayfanın aşağısındaki ilanların da yüklenmesi için kaydırma işlemi
+        # HIZLANDIRMA 2: 4 saniyelik sabit beklemeyi tamamen sildik.
+        
+        # Sayfanın aşağısındaki ilanların da (tembel yükleme / lazy load) yüklenmesi için kaydırma işlemi
         page.evaluate("window.scrollBy(0, 2000)")
-        page.wait_for_timeout(2000)
+        
+        # HIZLANDIRMA 3: 2 saniyelik beklemeyi sadece yarım saniyeye (500 ms) indirdik
+        page.wait_for_timeout(500) 
         
         html_icerigi = page.content()
         soup = BeautifulSoup(html_icerigi, "html.parser")
