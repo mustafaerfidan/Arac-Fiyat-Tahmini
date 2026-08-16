@@ -35,9 +35,17 @@ def main():
     print(f"Toplam {len(kategoriler)} adet kategori işlenmek üzere yüklendi.\n")
 
     with sync_playwright() as p:
-        # Sunucuda çalıştıracağımız için True yapıldı. 
+        # 2. HIZLANDIRMA: headless=True yapıldı. Arka planda (görünmez) çalışarak donanımı rahatlatır.
         tarayici = p.chromium.launch(headless=False) 
-        sayfa = tarayici.new_page()
+        
+        # 1. HIZLANDIRMA İÇİN HAZIRLIK: Context oluşturuyoruz ki içine özel kurallar yazabilelim
+        context = tarayici.new_context()
+        sayfa = context.new_page()
+        
+        # 1. HIZLANDIRMA: Resim, CSS, Video, Font ve Script indirmesini tamamen engelliyoruz!
+        sayfa.route("**/*", lambda route: route.abort() if route.request.resource_type in ["image", "stylesheet", "font", "media"] else route.continue_())
+        
+        print("🚀 Turbo mod aktif! Resimler/Reklamlar engelleniyor ve Headless modda çalışılıyor...\n")
 
         # Metin dosyasından okunan her bir kategori için döngü başlıyor
         for kategori_adi, kategori_linki in kategoriler.items():
@@ -57,7 +65,9 @@ def main():
                     if araba_verisi:
                         tum_araba_verileri.append(araba_verisi)
                     
-                    time.sleep(2) 
+                    # DİKKAT: Sabit 2 saniye bekleme komutu hızı çok düşürdüğü için pasif hale getirildi.
+                    # Eğer site çok hızlı istek attığın için seni engellerse, başındaki '#' işaretini kaldırabilirsin.
+                    # time.sleep(2) 
 
                 # 3. Aşama: Verileri CSV'ye çevir ve kaydet
                 if tum_araba_verileri:
