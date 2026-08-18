@@ -2,7 +2,7 @@ import pandas as pd
 from playwright.sync_api import sync_playwright
 import time
 import os
-import csv  # YENİ EKLENDİ: Anlık kayıt için
+import csv  # Anlık kayıt için
 
 # Kendi yazdığımız modülleri çağırıyoruz
 from link_toplayici import ilan_linklerini_topla 
@@ -35,6 +35,9 @@ def main():
 
     print(f"Toplam {len(kategoriler)} adet kategori işlenmek üzere yüklendi.\n")
 
+    # YENİ EKLENDİ: GİZLİ KRONOMETRE BAŞLIYOR
+    baslangic_zamani = time.time()
+
     with sync_playwright() as p:
         # HIZLANDIRMA VE MANUEL MÜDAHALE: headless=False (Tarayıcıyı görebilmen için açık tutuyoruz)
         tarayici = p.chromium.launch(headless=False) 
@@ -64,7 +67,15 @@ def main():
                 # 2. Aşama: Linklerin içine girip veri çek (ANLIK KAYIT MODU)
                 for index, link in enumerate(ilan_linkleri):
                     
-                    # YENİ EKLENDİ: Hata anında aynı ilanı tekrar deneyebilmesi için sonsuz döngü
+                    # YENİ EKLENDİ: TAKTİKSEL MOLA KONTROLÜ (GÜVENLİK SİSTEMİ BOZULMADAN)
+                    gecen_sure = time.time() - baslangic_zamani
+                    if gecen_sure >= 600:  # 600 saniye = Tam 10 dakika (Yakalama süresinden 55 saniye önce)
+                        print("\n☕ TAKTİKSEL MOLA: Cloudflare güvenlik duvarını sıfırlamak için 60 saniye dinleniliyor...")
+                        time.sleep(60) # 60 saniye sistemi uyut
+                        baslangic_zamani = time.time() # Kronometreyi sıfırla ve yeniden saymaya başla
+                        print("🚀 Mola bitti! Aynı hızda veri çekmeye tam gaz devam ediyoruz...\n")
+
+                    # Hata anında aynı ilanı tekrar deneyebilmesi için sonsuz döngü (DOKUNULMADI)
                     while True:
                         print(f"[{index + 1}/{len(ilan_linkleri)}] İşleniyor: {link}")
                         
@@ -73,46 +84,43 @@ def main():
                             sayfa_icerik = sayfa.content().lower()
                             sayfa_basligi = sayfa.title().lower()
 
-                            # 1. GERÇEK CAPTCHA KONTROLÜ (TÜRKÇE VE İNGİLİZCE KAPSAMLI)
+                            # 1. GERÇEK CAPTCHA KONTROLÜ (DOKUNULMADI - AYNEN KORUNDU)
                             if "bir dakika" in sayfa_basligi or "doğrulama" in sayfa_basligi or "just a moment" in sayfa_basligi or "cloudflare" in sayfa_basligi or "güvenlik doğrulaması" in sayfa_icerik:
                                 print("\n🚨 DİKKAT: Güvenlik Duvarı (Captcha/Cloudflare) algılandı!")
                                 input("👉 Lütfen tarayıcıdan engeli çözün. Çözdükten sonra devam etmek için ENTER'a basın...")
                                 print("🔄 Aynı ilan tekrar deneniyor...\n")
                                 continue
 
-                            # 2. VERİ ÇEKİLEMEDİ KONTROLÜ (Boş veya tamamen 'None' dönen sözlükleri de yakalar)
+                            # 2. VERİ ÇEKİLEMEDİ KONTROLÜ (DOKUNULMADI - AYNEN KORUNDU)
                             if not araba_verisi or not any(araba_verisi.values()):
                                 print("\n⚠️ UYARI: Sayfa açıldı ancak ilan verileri okunamadı! (İlan yayından kalkmış veya HTML değişmiş olabilir)")
                                 secim = input("👉 Tekrar denemek için ENTER'a basın (Veya ilanı atlamak için 'P' yazıp ENTER'a basın): ").strip().lower()
                                 if secim == 'p':
                                     print("⏭️ Bu ilan atlanıyor, veritabanına yazılmadı...")
-                                    break # Döngüyü kır, bir sonraki ilana geç
+                                    break 
                                 else:
                                     print("🔄 Aynı ilan tekrar deneniyor...\n")
                                     continue
 
-                            # YENİ EKLENDİ: ANINDA CSV'YE YAZMA
+                            # ANINDA CSV'YE YAZMA (DOKUNULMADI - AYNEN KORUNDU)
                             if araba_verisi:
                                 if not dosya_olusturuldu_mu:
-                                    # İlk ilanda dosyayı 'w' (yazma) modunda aç ve başlıkları (sütun isimlerini) koy
                                     with open(dosya_ismi, "w", encoding="utf-8-sig", newline="") as f:
                                         writer = csv.DictWriter(f, fieldnames=araba_verisi.keys())
                                         writer.writeheader()
                                         writer.writerow(araba_verisi)
                                     dosya_olusturuldu_mu = True
                                 else:
-                                    # Sonraki ilanlarda dosyayı 'a' (append/ekleme) modunda aç, sadece veriyi alt satıra ekle
                                     with open(dosya_ismi, "a", encoding="utf-8-sig", newline="") as f:
                                         writer = csv.DictWriter(f, fieldnames=araba_verisi.keys())
                                         writer.writerow(araba_verisi)
                                 
-                                # Veri başarıyla kaydedildi, döngüden çıkıp bir sonraki linke geçebiliriz
-                                break
+                                break # Veri başarıyla kaydedildi, döngüden çıkıp bir sonraki linke geç
 
                         except Exception as e:
                             print(f"\n🚨 İLAN SAYFASINDA BEKLENMEYEN HATA: {e}")
                             input("👉 Lütfen tarayıcıyı kontrol edin. Devam etmek için ENTER'a basın...")
-                            continue # Hata olsa bile çökme, çözülmesini bekle ve tekrar dene
+                            continue 
 
                 print(f"✅ BİTTİ: '{kategori_adi}' işlemleri tamamlandı. Dosya hazır: {dosya_ismi}")
 

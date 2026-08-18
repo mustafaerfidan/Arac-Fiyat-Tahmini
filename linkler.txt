@@ -1,10 +1,3 @@
-oto_audi_27,https://www.arabam.com/ikinci-el/otomobil/audi-a4-a4-sedan-40-tdi-quattro
-oto_audi_28,https://www.arabam.com/ikinci-el/otomobil/audi-a4-a4-sedan-45-tfsi-quattro
-oto_audi_29,https://www.arabam.com/ikinci-el/otomobil/audi-a5
-oto_audi_30,https://www.arabam.com/ikinci-el/otomobil/audi-a6
-oto_audi_31,https://www.arabam.com/ikinci-el/otomobil/audi-a8
-oto_audi_32,https://www.arabam.com/ikinci-el/otomobil/audi-rs
-oto_audi_33,https://www.arabam.com/ikinci-el/otomobil/audi-s
 oto_audi_34,https://www.arabam.com/ikinci-el/otomobil/audi-tt
 oto_audi_35,https://www.arabam.com/ikinci-el/otomobil/audi-80-serisi
 oto_audi_36,https://www.arabam.com/ikinci-el/otomobil/audi-90-serisi
