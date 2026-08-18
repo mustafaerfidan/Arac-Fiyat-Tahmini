@@ -1,7 +1,4 @@
-oto_alfa_romeo,https://www.arabam.com/ikinci-el/otomobil/alfa-romeo
-oto_audi_a1,https://www.arabam.com/ikinci-el/otomobil/audi-a1?take=50
-oto_audi_a3_sedan,https://www.arabam.com/ikinci-el/otomobil/audi-a3-a3-sedan
-oto_audi_a3_sportback,https://www.arabam.com/ikinci-el/otomobil/audi-a3-a3-sportback
+
 oto_audi_a4,https://www.arabam.com/ikinci-el/otomobil/audi-a4?take=50
 oto_audi_a5,https://www.arabam.com/ikinci-el/otomobil/audi-a5?take=50
 oto_audi_a6,https://www.arabam.com/ikinci-el/otomobil/audi-a6?take=50
