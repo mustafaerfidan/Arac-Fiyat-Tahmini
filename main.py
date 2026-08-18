@@ -71,14 +71,25 @@ def main():
                         try:
                             araba_verisi = araba_verisi_cek(sayfa, link)
                             sayfa_icerik = sayfa.content().lower()
+                            sayfa_basligi = sayfa.title().lower()
 
-                            # YENİ EKLENDİ: HİBRİT BEKLEME SİSTEMİ
-                            # Veri boşsa VEYA ekranda robot/güvenlik uyarısı varsa botu durdur
-                            if not araba_verisi or "güvenlik" in sayfa_icerik or "robot" in sayfa_icerik or "cloudflare" in sayfa_icerik:
-                                print("\n🚨 DİKKAT: Veri çekilemedi veya Güvenlik Duvarı (Captcha) algılandı!")
-                                input("👉 Lütfen tarayıcıdan engeli elinizle çözün (veya sayfanın yüklenmesini sağlayın).\n   Çözdükten sonra devam etmek için bu ekranda ENTER tuşuna basın...")
+                            # 1. GERÇEK CAPTCHA KONTROLÜ (TÜRKÇE VE İNGİLİZCE KAPSAMLI)
+                            if "bir dakika" in sayfa_basligi or "doğrulama" in sayfa_basligi or "just a moment" in sayfa_basligi or "cloudflare" in sayfa_basligi or "güvenlik doğrulaması" in sayfa_icerik:
+                                print("\n🚨 DİKKAT: Güvenlik Duvarı (Captcha/Cloudflare) algılandı!")
+                                input("👉 Lütfen tarayıcıdan engeli çözün. Çözdükten sonra devam etmek için ENTER'a basın...")
                                 print("🔄 Aynı ilan tekrar deneniyor...\n")
-                                continue # Döngüyü kırma, aynı linki bir daha dene!
+                                continue
+
+                            # 2. VERİ ÇEKİLEMEDİ KONTROLÜ (Boş veya tamamen 'None' dönen sözlükleri de yakalar)
+                            if not araba_verisi or not any(araba_verisi.values()):
+                                print("\n⚠️ UYARI: Sayfa açıldı ancak ilan verileri okunamadı! (İlan yayından kalkmış veya HTML değişmiş olabilir)")
+                                secim = input("👉 Tekrar denemek için ENTER'a basın (Veya ilanı atlamak için 'P' yazıp ENTER'a basın): ").strip().lower()
+                                if secim == 'p':
+                                    print("⏭️ Bu ilan atlanıyor, veritabanına yazılmadı...")
+                                    break # Döngüyü kır, bir sonraki ilana geç
+                                else:
+                                    print("🔄 Aynı ilan tekrar deneniyor...\n")
+                                    continue
 
                             # YENİ EKLENDİ: ANINDA CSV'YE YAZMA
                             if araba_verisi:
