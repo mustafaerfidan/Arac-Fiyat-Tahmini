@@ -83,7 +83,7 @@ def main():
                             print(f"🏃 Vur-Kaç taktiği devrede: {index} adet ilan kurtarıldı. Bu kategori kapatılıp sıradakine geçiliyor...\n")
                             break # İlan döngüsünü kırar, sonraki kategoriye geçer
 
-                        # İlan boşsa atlama (Pas geçme)
+                        # İlan boşsa atlama (Pass geçme)
                         if not araba_verisi or not any(araba_verisi.values()):
                             print("⏭️ İlan okunamadı (yayından kalkmış olabilir), atlanıyor...")
                             continue # Bunu direkt atlattık (Vur-Kaç için hızlı geçiş)
