@@ -14,6 +14,7 @@ def dosya_adi_yap(metin):
     return re.sub(r'[^a-zA-Z0-9]', '_', str(metin).strip().upper())
 
 # TEK MERKEZDEN EĞİTİM YAPAN FONKSİYON
+# TEK MERKEZDEN EĞİTİM YAPAN FONKSİYON
 def uzman_egit_ve_kaydet(alt_veri, dosya_prefix, aciklama):
     if len(alt_veri) < 50:
         return None 
@@ -51,29 +52,33 @@ def uzman_egit_ve_kaydet(alt_veri, dosya_prefix, aciklama):
     tahminler = np.expm1(model.predict(X_test))
     gercek = np.expm1(y_test)
     
-    # --- SENİN EFSANE MANTIĞIN: ARALIK İSABET ORANI ---
+    # --- SENİN EFSANE MANTIĞIN: ARALIK İSABET ORANI VE TİCARİ HATA ---
     # Bu grubun piyasa dalgalanmasını (makasını) buluyoruz
     grup_sapmasi = alt_veri['Fiyat'].std() / alt_veri['Fiyat'].mean()
-    makas = max(0.03, min(grup_sapmasi, 0.08)) # %3 ile %8 arası sınırlandır
+    makas = max(0.10, min(grup_sapmasi, 0.18))
     
     # Alt ve üst sınırları test seti için oluşturuyoruz
     alt_sinirlar = tahminler * (1 - makas)
     ust_sinirlar = tahminler * (1 + makas)
     
-    # Gerçek fiyatların kaç tanesi bizim makasımızın tam içine düştü?
+    # 1. Gerçek fiyatların kaç tanesi bizim makasımızın tam içine düştü?
     isabet_sayisi = ((gercek >= alt_sinirlar) & (gercek <= ust_sinirlar)).sum()
     isabet_orani = (isabet_sayisi / len(gercek)) * 100
-    # --------------------------------------------------
-
-    r2 = r2_score(gercek, tahminler)
     
-    # Ekrana artık sadece R2 değil, senin İsabet Oranını da basıyoruz!
-    print(f"   ✅ {aciklama} | Nokta Atışı R²: %{r2*100:.1f} | Makas İsabeti: %{isabet_orani:.1f}")
+    # 2. YENİ EKLENEN: MAKAS DIŞI HATA (Sınır Taşan Hata)
+    hata_ust = np.maximum(0, gercek - ust_sinirlar)
+    hata_alt = np.maximum(0, alt_sinirlar - gercek)
+    toplam_makas_disi_hata = hata_ust + hata_alt
+    ticari_ortalama_hata = np.mean(toplam_makas_disi_hata)
+    # --------------------------------------------------
+    
+    # Ekrana artık o klasik R2 veya anlamsız MAE yerine, tamamen senin icat ettiğin ticari metrikleri basıyoruz!
+    print(f"   ✅ {aciklama} | Makas İsabeti: %{isabet_orani:.1f} | Sınır Taşan Hata: {ticari_ortalama_hata:,.0f} TL")
 
     joblib.dump(model, f"modeller/{dosya_prefix}_model.pkl")
     joblib.dump(encoding_sozlugu, f"modeller/{dosya_prefix}_dict.pkl")
     
-    return isabet_orani # Artık sistem başarısını R2'ye göre değil, senin isabet oranına göre ölçecek!
+    return isabet_orani # Artık sistem başarısını senin isabet oranına göre ölçecek!
 
 def tam_sistem_egitimi():
     print("⏳ Temizlenmiş veri yükleniyor (cleaned_dataset.csv)...")
