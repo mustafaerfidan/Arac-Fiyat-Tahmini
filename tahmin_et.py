@@ -8,34 +8,26 @@ import warnings
 warnings.filterwarnings('ignore')
 
 def dosya_adi_yap(metin):
-    return re.sub(r'[^a-zA-Z0-9]', '_', str(metin).strip().upper())
+    metin = str(metin).replace('İ', 'I').replace('ı', 'i').replace('Ş', 'S').replace('ş', 's')
+    metin = metin.replace('Ğ', 'G').replace('ğ', 'g').replace('Ü', 'U').replace('ü', 'u')
+    metin = metin.replace('Ö', 'O').replace('ö', 'o').replace('Ç', 'C').replace('ç', 'c')
+    return re.sub(r'[^a-zA-Z0-9]', '_', metin.strip().upper())
 
-def sistemdeki_modelleri_ogren():
+def sistemdeki_markalari_ogren():
     mevcut_markalar = set()
-    mevcut_kasalar = set()
-    
     if os.path.exists('modeller'):
         for dosya in os.listdir('modeller'):
-            if dosya.endswith('_model.pkl'):
-                isim_kismi = dosya.replace('_model.pkl', '')
-                parcalar = isim_kismi.split('_')
-                if "GENEL" in parcalar:
-                    mevcut_markalar.add(parcalar[0])
-                elif "TUM" not in parcalar:
-                    mevcut_markalar.add(parcalar[0])
-                    if len(parcalar) > 1:
-                        mevcut_kasalar.add(parcalar[1])
-                        
-    return list(mevcut_markalar), list(mevcut_kasalar)
+            if dosya.endswith('_model.pkl') and dosya != 'TUM_PIYASA_model.pkl':
+                mevcut_markalar.add(dosya.split('_')[0])
+    return list(mevcut_markalar)
 
 def akilli_metin_duzelt(kullanici_girdisi, dogru_liste):
     girdi_formatli = dosya_adi_yap(kullanici_girdisi)
     if girdi_formatli in dogru_liste:
         return girdi_formatli
-        
     benzerler = difflib.get_close_matches(girdi_formatli, dogru_liste, n=1, cutoff=0.5)
     if benzerler:
-        print(f"🪄 Yazım düzeltildi: '{kullanici_girdisi}' -> '{benzerler[0]}'")
+        print(f"🪄 Marka yazımı düzeltildi: '{kullanici_girdisi}' -> '{benzerler[0]}'")
         return benzerler[0]
     return girdi_formatli
 
@@ -45,7 +37,6 @@ def piyasa_dalgalanmasini_bul(marka, seri, yil):
         benzer_araclar = df[(df['Marka'].str.upper() == marka.upper()) & 
                             (df['Seri'].str.upper() == seri.upper()) & 
                             (df['Yıl'].between(yil - 1, yil + 1))]
-        
         if len(benzer_araclar) > 5:
             sapma = benzer_araclar['Fiyat'].std()
             ortalama = benzer_araclar['Fiyat'].mean()
@@ -58,18 +49,21 @@ def arac_fiyatini_tahmin_et(arac_bilgileri, detayli_ekspertiz):
     print("\n⏳ Yapay Zeka Ekspertiz Raporunu İşliyor, Lütfen Bekleyin...")
     
     ham_marka = arac_bilgileri.get('Marka', '')
+    ham_seri = arac_bilgileri.get('Seri', '')
     ham_kasa = arac_bilgileri.get('Kasa Tipi', '')
     
-    bilinen_markalar, bilinen_kasalar = sistemdeki_modelleri_ogren()
-    
+    bilinen_markalar = sistemdeki_markalari_ogren()
     dosya_marka = akilli_metin_duzelt(ham_marka, bilinen_markalar)
-    dosya_kasa = akilli_metin_duzelt(ham_kasa, bilinen_kasalar)
+    dosya_seri = dosya_adi_yap(ham_seri)
+    dosya_kasa = dosya_adi_yap(ham_kasa)
     
     arac_bilgileri['Marka'] = ham_marka.capitalize()
+    arac_bilgileri['Seri'] = ham_seri.capitalize()
     arac_bilgileri['Kasa Tipi'] = ham_kasa.capitalize()
     
     yollar = [
-        (f"modeller/{dosya_marka}_{dosya_kasa}", f"🎯 MİKRO UZMAN ({dosya_marka} {dosya_kasa})"),
+        (f"modeller/{dosya_marka}_{dosya_seri}", f"🎯 SPESİFİK SERİ UZMANI ({dosya_marka} {dosya_seri})"),
+        (f"modeller/{dosya_marka}_{dosya_kasa}", f"🛡️ KASA TİPİ YEDEK UZMANI ({dosya_marka} {dosya_kasa})"),
         (f"modeller/{dosya_marka}_GENEL", f"🪂 MARKA GENEL UZMANI ({dosya_marka})"),
         (f"modeller/TUM_PIYASA", "🌍 TÜRKİYE PİYASA UZMANI (Genel Kurtarıcı)")
     ]
@@ -90,7 +84,6 @@ def arac_fiyatini_tahmin_et(arac_bilgileri, detayli_ekspertiz):
     encoding_dict = joblib.load(secilen_yol + "_dict.pkl")
     
     yil = arac_bilgileri.get('Yıl', 2020)
-    seri = arac_bilgileri.get('Seri', '')
     model_donanim = arac_bilgileri.get('Model', '')
     arac_bilgileri['Arac_Yasi'] = 2026 - yil
     if arac_bilgileri['Arac_Yasi'] <= 0: arac_bilgileri['Arac_Yasi'] = 1
@@ -113,12 +106,24 @@ def arac_fiyatini_tahmin_et(arac_bilgileri, detayli_ekspertiz):
     ham_fiyat = np.expm1(model.predict(df)[0])
     fiyat_carpani = 1.0
     kirmizi_cizgiler = []
+    artilar = [] # YENİ: Araca değer katan özellikler listesi
     
+    # 1. YENİ EKLENEN: Ağır Hasar Kontrolü (Fiyatı fena çakar)
+    if detayli_ekspertiz.get('Agir_Hasar_Kaydi', False):
+        fiyat_carpani -= 0.18
+        kirmizi_cizgiler.append("AĞIR HASAR / PERT KAYDI (-%18.0)")
+
+    # 2. YENİ EKLENEN: Periyodik Bakım Kontrolü (Fiyata prim yaptırır)
+    if detayli_ekspertiz.get('Periyodik_Bakim_Duzenli', False):
+        fiyat_carpani += 0.04
+        artilar.append("Düzenli Periyodik Bakım Geçmişi (+%4.0)")
+
+    # Tramer Oransal Hesabı
     tramer = detayli_ekspertiz.get('Tramer_Tutari_TL', 0)
     if tramer > 0: 
         tramer_etkisi = min(tramer / ham_fiyat, 0.15)
         fiyat_carpani -= tramer_etkisi
-        kirmizi_cizgiler.append(f"Tramer Kaydı ({tramer:,.0f} TL) -> %{tramer_etkisi*100:.1f} Değer Kaybı")
+        kirmizi_cizgiler.append(f"Tramer Kaydı ({tramer:,.0f} TL) -> -%{tramer_etkisi*100:.1f} Değer Kaybı")
 
     kritik = detayli_ekspertiz.get('Kritik_Noktalar_Islemli_Mi', {})
     if kritik.get('Sase', False): fiyat_carpani -= 0.12; kirmizi_cizgiler.append("Şase İşlemli (-%12)")
@@ -143,7 +148,7 @@ def arac_fiyatini_tahmin_et(arac_bilgileri, detayli_ekspertiz):
         fiyat_carpani -= oran
         if oran > 0: kirmizi_cizgiler.append(f"{parca.replace('_', ' ')}: {durum.replace('_', ' ')} (-%{oran*100:.1f})")
 
-    fiyat_carpani = max(0.55, fiyat_carpani)
+    fiyat_carpani = max(0.55, fiyat_carpani) # Araba pert bile olsa fiyatı sıfırlamayalım
     guncel_ana_fiyat = ham_fiyat * fiyat_carpani
 
     puanlar = detayli_ekspertiz.get('Kondisyon_Puanlari_1_10', {})
@@ -152,7 +157,7 @@ def arac_fiyatini_tahmin_et(arac_bilgileri, detayli_ekspertiz):
     maksimum_puan = sum(10 * v for v in puan_katsayilari.values())
     basari_yuzdesi = toplam_puan / maksimum_puan
 
-    piyasa_sapmasi = piyasa_dalgalanmasini_bul(arac_bilgileri['Marka'], seri, yil)
+    piyasa_sapmasi = piyasa_dalgalanmasini_bul(arac_bilgileri['Marka'], ham_seri, yil)
     ana_dip = guncel_ana_fiyat * (1 - piyasa_sapmasi)
     ana_tavan = guncel_ana_fiyat * (1 + piyasa_sapmasi)
     ana_makas = ana_tavan - ana_dip
@@ -165,17 +170,21 @@ def arac_fiyatini_tahmin_et(arac_bilgileri, detayli_ekspertiz):
     print("\n" + "="*65)
     print("✨ YAPAY ZEKA OTO EKSPERTİZ VE DEĞERLEME RAPORU ✨")
     print("="*65)
-    # YENİ: ARAÇ BİLGİSİ EKRANA YAZDIRILIYOR
-    print(f"🚗 HESAPLANAN ARAÇ            : {arac_bilgileri['Marka']} {seri} {model_donanim}")
+    print(f"🚗 HESAPLANAN ARAÇ            : {arac_bilgileri['Marka']} {ham_seri.capitalize()} {model_donanim}")
     print(f"🧠 KULLANILAN YAPAY ZEKA BEYNİ : {kullanilan_model_adi}")
     print("-" * 65)
     print(f"Araç Ham Piyasa Değeri        : {round(ham_fiyat, -3):,.0f} TL")
-    if kirmizi_cizgiler:
-        print("\n🚨 KAPORTA / MEKANİK DEĞER KAYIPLARI:")
-        for kusur in kirmizi_cizgiler: print(f"  - {kusur}")
-        print(f"  > Toplam Ekspertiz Değer Kaybı: %{(1.0 - fiyat_carpani)*100:.1f}")
-        print("-" * 65)
     
+    if artilar:
+        print("\n🌟 ARACA DEĞER KATAN ÖZELLİKLER:")
+        for arti in artilar: print(f"  + {arti}")
+
+    if kirmizi_cizgiler:
+        print("\n🚨 DEĞER KAYBI YARATAN KUSURLAR:")
+        for kusur in kirmizi_cizgiler: print(f"  - {kusur}")
+        
+    print("-" * 65)
+    print(f"Net Ekspertiz Fiyat Çarpanı   : %{(fiyat_carpani)*100:.1f}")
     print(f"Mekanik & İç Kozmetik Puanı   : %{basari_yuzdesi*100:.1f}")
     print(f"Geniş Piyasa Ağı (Sınır)      : {round(ana_dip, -3):,.0f} TL - {round(ana_tavan, -3):,.0f} TL")
     print("-" * 65)
@@ -191,7 +200,6 @@ def sayi_al(mesaj, varsayilan=5):
     except:
         return varsayilan
 
-# ÇALIŞTIRMA BLOĞU BURADAN BAŞLIYOR!
 if __name__ == "__main__":
     print("\n" + "#"*60)
     print("HOŞGELDİNİZ - ARAÇ DEĞERLEME VE EKSPERTİZ GİRİŞ SİSTEMİ")
@@ -200,10 +208,10 @@ if __name__ == "__main__":
     print("\n--- 1. ARAÇ TEMEL BİLGİLERİ ---")
     arac = {
         'Marka': input("Marka (Örn: Opel): ").strip().capitalize(),
-        'Seri': input("Seri (Örn: Astra): ").strip().capitalize(),
-        'Model': input("Model/Donanım (Örn: 1.6 Essentia): ").strip(),
-        'Yıl': sayi_al("Yıl (Örn: 2012): ", 2012),
-        'Kasa Tipi': input("Kasa Tipi (Hatchback/Sedan/SUV): ").strip().capitalize(),
+        'Seri': input("Seri (Örn: Astra, Egea, A3): ").strip(),
+        'Model': input("Model/Donanım (Örn: 1.3 Multijet Easy): ").strip(),
+        'Yıl': sayi_al("Yıl (Örn: 2017): ", 2017),
+        'Kasa Tipi': input("Kasa Tipi (Hatchback/Sedan/SUV vs.): ").strip().capitalize(),
         'Kilometre': sayi_al("Kilometre (Örn: 140000): ", 100000),
         'Vites Tipi': input("Vites (Manuel/Otomatik/Yarı Otomatik): ").strip().capitalize(),
         'Yakıt Tipi': input("Yakıt (Benzin/Dizel/LPG & Benzin): ").strip().capitalize(),
@@ -212,16 +220,21 @@ if __name__ == "__main__":
         'Boya-değişen': 'Hatasız' 
     }
 
-    print("\n--- 2. TRAMER VE KRİTİK NOKTALAR ---")
+    print("\n--- 2. GEÇMİŞ VE TRAMER BİLGİLERİ ---")
+    # Yeni eklenen sorular!
+    agir_hasar_cevap = input("Ağır Hasar (Pert) Kaydı var mı? (E/H): ").strip().upper()
+    bakim_cevap = input("Periyodik bakımları zamanında / yetkili serviste yapılmış mı? (E/H): ").strip().upper()
+    
     tramer_tutari = sayi_al("Tramer / Hasar Kaydı Tutarı (Yoksa 0): ", 0)
     
+    print("\n--- 3. KRİTİK NOKTALAR ---")
     kritik = {}
     print("Aşağıdaki noktalarda İŞLEM/HASAR varsa 'E', yoksa 'H' veya boş bırakıp Enter'a basın.")
     for nokta in ['Sase', 'Podye', 'Direkler', 'Bagaj_Havuzu', 'Airbag']:
         cevap = input(f"{nokta.replace('_', ' ')} İşlemli mi? (E/H): ").strip().upper()
         kritik[nokta] = True if cevap == 'E' else False
 
-    print("\n--- 3. KAPORTA DURUMU ---")
+    print("\n--- 4. KAPORTA DURUMU ---")
     print("Seçenekler: 1-Orijinal, 2-Boyali, 3-Lokal Boyali, 4-Degisen, 5-Plastik")
     durum_map = {'1': 'Orijinal', '2': 'Boyali', '3': 'Lokal_Boyali', '4': 'Degisen', '5': 'Plastik_Parca'}
     kaporta = {}
@@ -233,7 +246,7 @@ if __name__ == "__main__":
         sec = input(f"{p.replace('_', ' ')} durumu (1-5, Orijinal için boş bırak): ").strip()
         kaporta[p] = durum_map.get(sec, 'Orijinal')
 
-    print("\n--- 4. KONDİSYON SKORLARI (1-10 ARASI PUAN VERİN) ---")
+    print("\n--- 5. KONDİSYON SKORLARI (1-10 ARASI PUAN VERİN) ---")
     kondisyon = {
         'Motor': sayi_al("Motor Performansı (1-10): ", 5),
         'Sanziman': sayi_al("Şanzıman ve Vites Geçişleri (1-10): ", 5),
@@ -244,6 +257,8 @@ if __name__ == "__main__":
     }
 
     ekspertiz = {
+        'Agir_Hasar_Kaydi': True if agir_hasar_cevap == 'E' else False,
+        'Periyodik_Bakim_Duzenli': True if bakim_cevap == 'E' else False,
         'Tramer_Tutari_TL': tramer_tutari,
         'Kritik_Noktalar_Islemli_Mi': kritik,
         'Kaporta_Durumu': kaporta,
