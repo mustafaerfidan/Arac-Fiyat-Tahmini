@@ -3,18 +3,19 @@ import numpy as np
 import os
 import joblib
 from sklearn.model_selection import train_test_split
-from sklearn.metrics import r2_score, mean_absolute_error
+from sklearn.metrics import r2_score
 import xgboost as xgb
 import warnings
 import re
 warnings.filterwarnings('ignore')
 
-# Dosya isimlerinde sorun çıkarmaması için metin temizleyici (Örn: "Alfa Romeo" -> "ALFA_ROMEO")
 def dosya_adi_yap(metin):
-    return re.sub(r'[^a-zA-Z0-9]', '_', str(metin).strip().upper())
+    # Türkçe karakterleri ve boşlukları sistemin anlayacağı standart formata çevirir (Örn: "1 SERİSİ" -> "1_SERISI")
+    metin = str(metin).replace('İ', 'I').replace('ı', 'i').replace('Ş', 'S').replace('ş', 's')
+    metin = metin.replace('Ğ', 'G').replace('ğ', 'g').replace('Ü', 'U').replace('ü', 'u')
+    metin = metin.replace('Ö', 'O').replace('ö', 'o').replace('Ç', 'C').replace('ç', 'c')
+    return re.sub(r'[^a-zA-Z0-9]', '_', metin.strip().upper())
 
-# TEK MERKEZDEN EĞİTİM YAPAN FONKSİYON
-# TEK MERKEZDEN EĞİTİM YAPAN FONKSİYON
 def uzman_egit_ve_kaydet(alt_veri, dosya_prefix, aciklama):
     if len(alt_veri) < 50:
         return None 
@@ -52,80 +53,79 @@ def uzman_egit_ve_kaydet(alt_veri, dosya_prefix, aciklama):
     tahminler = np.expm1(model.predict(X_test))
     gercek = np.expm1(y_test)
     
-    # --- SENİN EFSANE MANTIĞIN: ARALIK İSABET ORANI VE TİCARİ HATA ---
-    # Bu grubun piyasa dalgalanmasını (makasını) buluyoruz
     grup_sapmasi = alt_veri['Fiyat'].std() / alt_veri['Fiyat'].mean()
-    makas = max(0.10, min(grup_sapmasi, 0.18))
+    makas = max(0.10, min(grup_sapmasi, 0.18)) 
     
-    # Alt ve üst sınırları test seti için oluşturuyoruz
     alt_sinirlar = tahminler * (1 - makas)
     ust_sinirlar = tahminler * (1 + makas)
     
-    # 1. Gerçek fiyatların kaç tanesi bizim makasımızın tam içine düştü?
     isabet_sayisi = ((gercek >= alt_sinirlar) & (gercek <= ust_sinirlar)).sum()
     isabet_orani = (isabet_sayisi / len(gercek)) * 100
     
-    # 2. YENİ EKLENEN: MAKAS DIŞI HATA (Sınır Taşan Hata)
     hata_ust = np.maximum(0, gercek - ust_sinirlar)
     hata_alt = np.maximum(0, alt_sinirlar - gercek)
     toplam_makas_disi_hata = hata_ust + hata_alt
     ticari_ortalama_hata = np.mean(toplam_makas_disi_hata)
-    # --------------------------------------------------
-    
-    # Ekrana artık o klasik R2 veya anlamsız MAE yerine, tamamen senin icat ettiğin ticari metrikleri basıyoruz!
+
     print(f"   ✅ {aciklama} | Makas İsabeti: %{isabet_orani:.1f} | Sınır Taşan Hata: {ticari_ortalama_hata:,.0f} TL")
 
     joblib.dump(model, f"modeller/{dosya_prefix}_model.pkl")
     joblib.dump(encoding_sozlugu, f"modeller/{dosya_prefix}_dict.pkl")
     
-    return isabet_orani # Artık sistem başarısını senin isabet oranına göre ölçecek!
+    return isabet_orani
 
 def tam_sistem_egitimi():
     print("⏳ Temizlenmiş veri yükleniyor (cleaned_dataset.csv)...")
     df = pd.read_csv("cleaned_dataset.csv", low_memory=False)
 
-    # Temel eksikleri at ve Araç Yaşını hesapla (2026'ya göre)
-    df = df.dropna(subset=['Fiyat', 'Kilometre', 'Yıl', 'Marka', 'Kasa Tipi'])
+    df = df.dropna(subset=['Fiyat', 'Kilometre', 'Yıl', 'Marka', 'Seri', 'Kasa Tipi'])
     df['Arac_Yasi'] = 2026 - df['Yıl']
     df['Arac_Yasi'] = df['Arac_Yasi'].replace(0, 1)
 
-    # Modellerin kaydedileceği klasörü oluştur
     os.makedirs('modeller', exist_ok=True)
     
-    # İşimize yaramayacak gereksiz sütunları sil
     silinecekler = ['İlan Başlığı', 'Ortalama Yakıt Tüketimi', 'Ort. Yakıt Tüketimi', 'Yıl', 'Yakıt Deposu', 'Motor Hacmi', 'Motor Gücü', 'Ağır Hasarlı', 'Boya/Değişen']
     df = df.drop(columns=[col for col in silinecekler if col in df.columns], errors='ignore')
     df = df.dropna()
 
     genel_r2_listesi = []
 
-    print("\n" + "="*50)
-    print("🚀 AŞAMA 1: MİKRO UZMANLAR EĞİTİLİYOR (Marka + Kasa Tipi)")
-    print("="*50)
-    for (marka, kasa_tipi), alt_veri in df.groupby(['Marka', 'Kasa Tipi']):
-        prefix = f"{dosya_adi_yap(marka)}_{dosya_adi_yap(kasa_tipi)}"
-        aciklama = f"UZMAN: {marka.upper()} {kasa_tipi.upper()}"
+    print("\n" + "="*60)
+    print("🚀 AŞAMA 1: NOKTA ATIŞI SERİ UZMANLARI EĞİTİLİYOR (Örn: AUDI A3)")
+    print("="*60)
+    for (marka, seri), alt_veri in df.groupby(['Marka', 'Seri']):
+        prefix = f"{dosya_adi_yap(marka)}_{dosya_adi_yap(seri)}"
+        aciklama = f"SERİ UZMANI: {marka.upper()} {seri.upper()}"
         r2 = uzman_egit_ve_kaydet(alt_veri, prefix, aciklama)
         if r2: genel_r2_listesi.append(r2)
 
-    print("\n" + "="*50)
-    print("🪂 AŞAMA 2: YEDEK PARAŞÜT 1 - MARKA GENEL UZMANLARI EĞİTİLİYOR")
-    print("="*50)
+    print("\n" + "="*60)
+    print("🛡️ AŞAMA 2: KASA TİPİ YEDEK UZMANLARI EĞİTİLİYOR (Örn: AUDI SEDAN)")
+    print("="*60)
+    for (marka, kasa), alt_veri in df.groupby(['Marka', 'Kasa Tipi']):
+        prefix = f"{dosya_adi_yap(marka)}_{dosya_adi_yap(kasa)}"
+        aciklama = f"KASA UZMANI: {marka.upper()} {kasa.upper()}"
+        r2 = uzman_egit_ve_kaydet(alt_veri, prefix, aciklama)
+        if r2: genel_r2_listesi.append(r2)
+
+    print("\n" + "="*60)
+    print("🪂 AŞAMA 3: MARKA GENEL UZMANLARI EĞİTİLİYOR (Örn: AUDI GENEL)")
+    print("="*60)
     for marka, alt_veri in df.groupby('Marka'):
         prefix = f"{dosya_adi_yap(marka)}_GENEL"
         aciklama = f"MARKA GENEL: {marka.upper()}"
         uzman_egit_ve_kaydet(alt_veri, prefix, aciklama)
 
-    print("\n" + "="*50)
-    print("🌍 AŞAMA 3: YEDEK PARAŞÜT 2 - TÜM PİYASA UZMANI EĞİTİLİYOR")
-    print("="*50)
+    print("\n" + "="*60)
+    print("🌍 AŞAMA 4: TÜM PİYASA UZMANI EĞİTİLİYOR (Son Kurtarıcı)")
+    print("="*60)
     uzman_egit_ve_kaydet(df, "TUM_PIYASA", "TÜRKİYE PİYASASI GENEL UZMANI")
 
-    ortalama_basari = np.mean(genel_r2_listesi) 
-    print("\n" + "="*50)
-    print("🏆 BÜTÜN HİYERARŞİK MODELLER VE YEDEK PARAŞÜTLER BAŞARIYLA KAYDEDİLDİ 🏆")
-    print(f"Sistemdeki 'Mikro Uzmanların' Ortalama Başarı Oranı: %{ortalama_basari:.2f}")
-    print("="*50)
+    ortalama_basari = np.mean(genel_r2_listesi)
+    print("\n" + "="*60)
+    print("🏆 ŞELALE MİMARİSİ BAŞARIYLA İNŞA EDİLDİ 🏆")
+    print(f"Seri ve Kasa Uzmanlarının Ortalama Başarı Oranı: %{ortalama_basari:.2f}")
+    print("="*60)
 
 if __name__ == "__main__":
     tam_sistem_egitimi()
