@@ -124,7 +124,7 @@ def tam_sistem_egitimi():
     ortalama_basari = np.mean(genel_r2_listesi)
     print("\n" + "="*60)
     print("🏆 ŞELALE MİMARİSİ BAŞARIYLA İNŞA EDİLDİ 🏆")
-    print(f"Seri ve Kasa Uzmanlarının Ortalama Başarı Oranı: %{ortalama_basari:.2f}")
+    print(f"Seri vee Kasa Uzmanlarının Ortalama Başarı Oranı: %{ortalama_basari:.2f}")
     print("="*60)
 
 if __name__ == "__main__":
