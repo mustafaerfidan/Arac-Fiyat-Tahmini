@@ -3,3 +3,4 @@ __pycache__/
 *.csv
 modeller/
 *.pkl
+ham_veriler/
