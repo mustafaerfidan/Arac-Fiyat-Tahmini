@@ -23,8 +23,7 @@ def sistemdeki_markalari_ogren():
 
 def akilli_metin_duzelt(kullanici_girdisi, dogru_liste):
     girdi_formatli = dosya_adi_yap(kullanici_girdisi)
-    if girdi_formatli in dogru_liste:
-        return girdi_formatli
+    if girdi_formatli in dogru_liste: return girdi_formatli
     benzerler = difflib.get_close_matches(girdi_formatli, dogru_liste, n=1, cutoff=0.5)
     if benzerler:
         print(f"🪄 Marka yazımı düzeltildi: '{kullanici_girdisi}' -> '{benzerler[0]}'")
@@ -41,8 +40,7 @@ def piyasa_dalgalanmasini_bul(marka, seri, yil):
             sapma = benzer_araclar['Fiyat'].std()
             ortalama = benzer_araclar['Fiyat'].mean()
             return max(0.10, min(sapma / ortalama, 0.18))
-    except:
-        pass
+    except: pass
     return 0.12 
 
 def arac_fiyatini_tahmin_et(arac_bilgileri, detayli_ekspertiz):
@@ -99,26 +97,21 @@ def arac_fiyatini_tahmin_et(arac_bilgileri, detayli_ekspertiz):
             
     beklenen_sutunlar = model.feature_names_in_
     for col in beklenen_sutunlar:
-        if col not in df.columns:
-            df[col] = 0
+        if col not in df.columns: df[col] = 0
     df = df[beklenen_sutunlar]
     
     ham_fiyat = np.expm1(model.predict(df)[0])
     fiyat_carpani = 1.0
     kirmizi_cizgiler = []
-    artilar = [] # YENİ: Araca değer katan özellikler listesi
+    artilar = [] 
     
-    # 1. YENİ EKLENEN: Ağır Hasar Kontrolü (Fiyatı fena çakar)
     if detayli_ekspertiz.get('Agir_Hasar_Kaydi', False):
-        fiyat_carpani -= 0.18
-        kirmizi_cizgiler.append("AĞIR HASAR / PERT KAYDI (-%18.0)")
-
-    # 2. YENİ EKLENEN: Periyodik Bakım Kontrolü (Fiyata prim yaptırır)
+        fiyat_carpani -= 0.18; kirmizi_cizgiler.append("AĞIR HASAR / PERT KAYDI (-%18.0)")
     if detayli_ekspertiz.get('Periyodik_Bakim_Duzenli', False):
-        fiyat_carpani += 0.04
-        artilar.append("Düzenli Periyodik Bakım Geçmişi (+%4.0)")
+        fiyat_carpani += 0.04; artilar.append("Düzenli Periyodik Bakım Geçmişi (+%4.0)")
+    if detayli_ekspertiz.get('Yedek_Anahtar', False):
+        fiyat_carpani += 0.01; artilar.append("Yedek Anahtar Mevcut (+%1.0)")
 
-    # Tramer Oransal Hesabı
     tramer = detayli_ekspertiz.get('Tramer_Tutari_TL', 0)
     if tramer > 0: 
         tramer_etkisi = min(tramer / ham_fiyat, 0.15)
@@ -126,12 +119,13 @@ def arac_fiyatini_tahmin_et(arac_bilgileri, detayli_ekspertiz):
         kirmizi_cizgiler.append(f"Tramer Kaydı ({tramer:,.0f} TL) -> -%{tramer_etkisi*100:.1f} Değer Kaybı")
 
     kritik = detayli_ekspertiz.get('Kritik_Noktalar_Islemli_Mi', {})
-    if kritik.get('Sase', False): fiyat_carpani -= 0.12; kirmizi_cizgiler.append("Şase İşlemli (-%12)")
-    if kritik.get('Podye', False): fiyat_carpani -= 0.08; kirmizi_cizgiler.append("Podye İşlemli (-%8)")
-    if kritik.get('Direkler', False): fiyat_carpani -= 0.10; kirmizi_cizgiler.append("Direkler İşlemli (-%10)")
-    if kritik.get('Bagaj_Havuzu', False): fiyat_carpani -= 0.06; kirmizi_cizgiler.append("Bagaj Havuzu İşlemli (-%6)")
-    if kritik.get('Airbag', False): fiyat_carpani -= 0.15; kirmizi_cizgiler.append("Airbag İşlemli (-%15)")
+    if kritik.get('Sase', False): fiyat_carpani -= 0.12; kirmizi_cizgiler.append("Şase İşlemli (-%12.0)")
+    if kritik.get('Podye', False): fiyat_carpani -= 0.08; kirmizi_cizgiler.append("Podye İşlemli (-%8.0)")
+    if kritik.get('Direkler', False): fiyat_carpani -= 0.10; kirmizi_cizgiler.append("Direkler İşlemli (-%10.0)")
+    if kritik.get('Onden_Kaza', False): fiyat_carpani -= 0.07; kirmizi_cizgiler.append("Önden Kaza Geçmişi (-%7.0)")
+    if kritik.get('Airbag', False): fiyat_carpani -= 0.15; kirmizi_cizgiler.append("Airbag Açmış/İşlemli (-%15.0)")
 
+    # Hassaslaştırılmış Kaporta Ağırlıkları
     kaporta = detayli_ekspertiz.get('Kaporta_Durumu', {})
     parca_agirliklari = {
         'Tavan': {'Boyali': 0.06, 'Lokal_Boyali': 0.02, 'Degisen': 0.12},
@@ -148,11 +142,23 @@ def arac_fiyatini_tahmin_et(arac_bilgileri, detayli_ekspertiz):
         fiyat_carpani -= oran
         if oran > 0: kirmizi_cizgiler.append(f"{parca.replace('_', ' ')}: {durum.replace('_', ' ')} (-%{oran*100:.1f})")
 
-    fiyat_carpani = max(0.55, fiyat_carpani) # Araba pert bile olsa fiyatı sıfırlamayalım
+    fiyat_carpani = max(0.55, fiyat_carpani) 
     guncel_ana_fiyat = ham_fiyat * fiyat_carpani
 
+    # Hassaslaştırılmış Puan Katsayıları
     puanlar = detayli_ekspertiz.get('Kondisyon_Puanlari_1_10', {})
-    puan_katsayilari = {'Motor': 4.0, 'Sanziman': 4.0, 'AltTakim': 3.0, 'Klima': 2.0, 'IcKozmetik': 2.0, 'Lastik': 1.0}
+    puan_katsayilari = {
+        'Motor': 5.0, 
+        'Sanziman': 4.5, 
+        'AltTakim': 3.0, 
+        'DisKozmetik': 2.5,
+        'IcKozmetik': 2.0, 
+        'Klima': 2.0, 
+        'BaskiBalata': 2.0,
+        'Frenler': 1.5,
+        'Lastik': 1.5,
+        'Aku': 0.5
+    }
     toplam_puan = sum(puanlar.get(k, 5) * v for k, v in puan_katsayilari.items())
     maksimum_puan = sum(10 * v for v in puan_katsayilari.values())
     basari_yuzdesi = toplam_puan / maksimum_puan
@@ -209,11 +215,11 @@ if __name__ == "__main__":
     arac = {
         'Marka': input("Marka (Örn: Opel): ").strip().capitalize(),
         'Seri': input("Seri (Örn: Astra, Egea, A3): ").strip(),
-        'Model': input("Model/Donanım (Örn: 1.3 Multijet Easy): ").strip(),
-        'Yıl': sayi_al("Yıl (Örn: 2017): ", 2017),
+        'Model': input("Model/Donanım (Örn: 1.6 Essentia): ").strip(),
+        'Yıl': sayi_al("Yıl (Örn: 2012): ", 2012),
         'Kasa Tipi': input("Kasa Tipi (Hatchback/Sedan/SUV vs.): ").strip().capitalize(),
         'Kilometre': sayi_al("Kilometre (Örn: 140000): ", 100000),
-        'Vites Tipi': input("Vites (Manuel/Otomatik/Yarı Otomatik): ").strip().capitalize(),
+        'Vites Tipi': input("Vites (Manuel/Otomatik): ").strip().capitalize(),
         'Yakıt Tipi': input("Yakıt (Benzin/Dizel/LPG & Benzin): ").strip().capitalize(),
         'Renk': input("Renk (Örn: Siyah): ").strip().capitalize(),
         'Çekiş': input("Çekiş (Örn: Önden Çekiş): ").strip().title(),
@@ -221,17 +227,16 @@ if __name__ == "__main__":
     }
 
     print("\n--- 2. GEÇMİŞ VE TRAMER BİLGİLERİ ---")
-    # Yeni eklenen sorular!
     agir_hasar_cevap = input("Ağır Hasar (Pert) Kaydı var mı? (E/H): ").strip().upper()
-    bakim_cevap = input("Periyodik bakımları zamanında / yetkili serviste yapılmış mı? (E/H): ").strip().upper()
-    
+    bakim_cevap = input("Periyodik bakımları düzenli/yetkili serviste yapılmış mı? (E/H): ").strip().upper()
+    yedek_anahtar_cevap = input("Yedek Anahtarı mevcut mu? (E/H): ").strip().upper()
     tramer_tutari = sayi_al("Tramer / Hasar Kaydı Tutarı (Yoksa 0): ", 0)
     
-    print("\n--- 3. KRİTİK NOKTALAR ---")
+    print("\n--- 3. KRİTİK NOKTALAR (AĞIR KUSURLAR) ---")
     kritik = {}
-    print("Aşağıdaki noktalarda İŞLEM/HASAR varsa 'E', yoksa 'H' veya boş bırakıp Enter'a basın.")
-    for nokta in ['Sase', 'Podye', 'Direkler', 'Bagaj_Havuzu', 'Airbag']:
-        cevap = input(f"{nokta.replace('_', ' ')} İşlemli mi? (E/H): ").strip().upper()
+    print("Aşağıdaki noktalarda İŞLEM veya KAZA varsa 'E', yoksa 'H' veya boş bırakıp Enter'a basın.")
+    for nokta in ['Onden_Kaza', 'Sase', 'Podye', 'Direkler', 'Bagaj_Havuzu', 'Airbag']:
+        cevap = input(f"{nokta.replace('_', ' ')} Hasarı/İşlemi var mı? (E/H): ").strip().upper()
         kritik[nokta] = True if cevap == 'E' else False
 
     print("\n--- 4. KAPORTA DURUMU ---")
@@ -248,17 +253,22 @@ if __name__ == "__main__":
 
     print("\n--- 5. KONDİSYON SKORLARI (1-10 ARASI PUAN VERİN) ---")
     kondisyon = {
-        'Motor': sayi_al("Motor Performansı (1-10): ", 5),
+        'Motor': sayi_al("Motor Performansı ve Ses (1-10): ", 5),
         'Sanziman': sayi_al("Şanzıman ve Vites Geçişleri (1-10): ", 5),
         'AltTakim': sayi_al("Alt Takım ve Süspansiyon (1-10): ", 5),
-        'Klima': sayi_al("Klima ve Elektronik (1-10): ", 5),
-        'IcKozmetik': sayi_al("İç Kozmetik / Koltuklar (1-10): ", 5),
-        'Lastik': sayi_al("Lastik ve Akü Durumu (1-10): ", 5)
+        'BaskiBalata': sayi_al("Baskı Balata / Kavrama Durumu (1-10): ", 5),
+        'Frenler': sayi_al("Fren Disk ve Balata Durumu (1-10): ", 5),
+        'Klima': sayi_al("Klima ve Elektronik Aksam (1-10): ", 5),
+        'DisKozmetik': sayi_al("Dış Kozmetik (Ezik, çizik, güneş yanığı yoksa yüksek puan) (1-10): ", 5),
+        'IcKozmetik': sayi_al("İç Kozmetik (Yanık, yırtık, deforme) (1-10): ", 5),
+        'Lastik': sayi_al("Lastik Durumu (1-10): ", 5),
+        'Aku': sayi_al("Akü Durumu (1-10): ", 5)
     }
 
     ekspertiz = {
         'Agir_Hasar_Kaydi': True if agir_hasar_cevap == 'E' else False,
         'Periyodik_Bakim_Duzenli': True if bakim_cevap == 'E' else False,
+        'Yedek_Anahtar': True if yedek_anahtar_cevap == 'E' else False,
         'Tramer_Tutari_TL': tramer_tutari,
         'Kritik_Noktalar_Islemli_Mi': kritik,
         'Kaporta_Durumu': kaporta,
